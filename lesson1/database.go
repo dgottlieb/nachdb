@@ -2,24 +2,9 @@ package nachdb
 
 import (
 	"errors"
-	"sync"
 )
 
 var NOT_FOUND error = errors.New("Key not found.")
-
-type GlobalTxn struct {
-	sync.Mutex
-	NextTxnId uint64
-	Sessions  []*Session
-}
-
-type Database struct {
-	GlobalTxn
-
-	sync.Mutex
-	NextSessionId uint64
-	Data          map[string]*UpdateChain
-}
 
 func NewDatabase() *Database {
 	return &Database{

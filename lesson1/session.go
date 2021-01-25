@@ -3,26 +3,7 @@ package nachdb
 import (
 	"errors"
 	"fmt"
-	"sync"
 )
-
-type Txn struct {
-	Id             uint64
-	SnapMin        uint64
-	SnapMax        uint64
-	ConcurrentSnap []uint64
-	Mods           []*Mod
-}
-
-type Session struct {
-	Id uint64
-
-	InTxn bool
-	Txn
-
-	Database *Database
-	sync.Mutex
-}
 
 func (session *Session) Write(key string, value int) error {
 	if !session.InTxn {
@@ -77,32 +58,4 @@ func (session *Session) Read(key string) (int, error) {
 	}
 
 	panic("Unreachable.")
-}
-
-func (session *Session) Rollback() error {
-	session.Lock()
-	defer session.Unlock()
-
-	if !session.InTxn {
-		return errors.New("Cannot rollback. Not in a transaction.")
-	}
-
-	session.InTxn = false
-	for _, mod := range session.Txn.Mods {
-		mod.TxnId = 0
-	}
-
-	return nil
-}
-
-func (session *Session) Commit() error {
-	session.Lock()
-	defer session.Unlock()
-
-	if !session.InTxn {
-		return errors.New("Cannot commit. Not in a transaction.")
-	}
-
-	session.InTxn = false
-	return nil
 }

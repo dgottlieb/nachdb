@@ -1,6 +1,9 @@
 package nachdb
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func doTest(test *testing.T, things []Action) {
 	rs := NewRunState()
@@ -29,4 +32,19 @@ func TestWriteConflict(test *testing.T) {
 		Begin("Bob"),
 		Error(Insert("Bob", "A", 2)),
 	})
+}
+
+func TestReadYourOwnWrite(test *testing.T) {
+	var db *Database = NewDatabase()
+	var alice *Session = db.NewSession()
+
+	// Ignore error handling.
+	_ = alice.BeginTxn()
+	alice.Write("Key", 1)
+	if val, err := alice.Read("Key"); err == NOT_FOUND || val != 1 {
+		panic(fmt.Sprintf("Failed reading own write. Val: %v", val))
+	}
+
+	// Ignore error handling.
+	_ = alice.Commit()
 }
