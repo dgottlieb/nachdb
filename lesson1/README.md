@@ -40,7 +40,7 @@ First we will implement `Session::BeginTxn`. Beginning a transaction should beha
 * Generate a transaction id to be used for its own writes (copied onto a `Mod.TxnId`). The `Database.GlobalTxn.NextTxnId` is provided for this purpose. Reminder: the `Database` can be accessed via `session.Database`.
  * This id should be saved into `session.Txn.Id`.
 * Acquire a snapshot. The transaction must determine, by looking at the state captured on `Database.GlobalTxn`, which document versions should be considered visible under snapshot isolation. `Database.GlobalTxn` should contain all the data necessary to acquire a snapshot.
- * It's expected that this will write values for `Txn.SnapMin`, `Txn.SnapMax` and `Txn.ConcurrentSnap`([Link for appending to slices (i.e: std::vector or ArrayList) in Go])](https://tour.golang.org/moretypes/15).
+ * It's expected that this will write values for `Txn.SnapMin`, `Txn.SnapMax` and `Txn.ConcurrentSnap`([Link for appending to slices (i.e: std::vector or ArrayList) in Go](https://tour.golang.org/moretypes/15)).
  * A transaction in snapshot isolation must be able to read its own (currently uncommitted) writes.
 
 Second we will implement `Session.IsVisible(txnId uint64)`:
