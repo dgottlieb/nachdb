@@ -12,6 +12,8 @@ const (
 	InsertMod Verb = iota
 	UpdateMod
 	DeleteMod
+
+	ROLLED_BACK uint64 = 0
 )
 
 func (verb Verb) String() string {

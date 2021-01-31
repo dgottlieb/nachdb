@@ -65,7 +65,7 @@ func (session *Session) Rollback() error {
 	}
 
 	for _, mod := range session.Txn.Mods {
-		mod.TxnId = 0
+		mod.TxnId = ROLLED_BACK
 	}
 
 	session.InTxn = false

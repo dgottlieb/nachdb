@@ -33,6 +33,21 @@ A session has a "back-pointer" to the `Database` object. It can be accessed as `
 ## UpdateChain
 An `UpdateChain` represents all the values that have been written to a key. This list is stored as a linked list. This exercise builds an MVCC (multi-version concurrency control) database. This means, instead of keeping a single value for each key (which requires relatively coarse locking for snapshot isolation), writers create a new version (update) for each document they write to. Readers walk the `UpdateChain` and return the appropriate version.
 
+For debugging purposes, there is an `UpdateChain::Dump() string` method that will output all of the versions for a given key.
+
+## Mod
+A `Mod` corresponds to a single version of a single document. For example, if we perform:
+1. Insert A 1
+2. Update A 2
+3. Delete A
+
+The key `A` will have an update chain containing three `Mod` objects. The `UpdateChain` will point to the most recent `Mod` object. A `Mod` has pointers to both the next and previous version (`Next` being the prior `Mod`). A `Mod` describes the write using a `Verb` of either:
+* Insert
+* Update
+* Delete
+
+A `Mod` also has a `TxnId` value. When a `Session`'s transaction does a write, it copies its current `Session.Txn.Id` into the new `Mod` object. This `Mod.TxnId` is used for visibility checks when a reader is trying to find the right version for a given key to return. The constant `ROLLED_BACK` (a value of `0`) states that the `Mod` was rolled back and should never be returned.
+
 # The Exercise
 First we will implement `Session::BeginTxn`. Beginning a transaction should behave as follows:
 
@@ -53,7 +68,7 @@ Definitions for `Session::Commit` and `Session::Rollback` are provided. A workin
 As such, feel free to change their definitions (but not their signatures). The `GlobalTxn` and `Txn` data types may also withstand some alterations without resulting in a compilation error.
 
 # Instruction/Hints
-One way to implement snapshot isolation is to have `GlobalTxn` track every `TxnId` that has ever committed in a set. Beginning a transaction could then take a lock and copy the set of committed transactions. A call to `IsVisible` returns true iff, the input `txnId` is in th set.
+One way to implement snapshot isolation is to have `GlobalTxn` track every `TxnId` that has ever committed in a set. Beginning a transaction could then take a lock and copy the set of committed transactions. A call to `IsVisible` returns true iff the input `txnId` is in the set.
 
 The example implementation obviously suffers in performance as the program commits more and more transactions. In this lesson (with the provided definitions for `Session::Commit` and `Session::Rollback`) there's a optimization the data types suggest.
 
@@ -94,3 +109,11 @@ var globalTxn *GlobalTxn = &session.Database.GlobalTxn
 // or
 globalTxn := &session.Database.GlobalTxn
 ```
+
+# Notes
+* Many of the structures embed a `sync.Mutex` value which allows one to call `object.Lock()` and `object.Unlock()`. In this exercise, locking is not necessary as the tests are run single-threaded. It's perfectly acceptable (in my opinion) to not attempt to lock objects. I added the `Mutex` objects to inspire people to think about safe (and deadlock-free) memory access in a concurrent environment and the associated costs for implementing snapshot isolation. But I believe having a locking solution is orthogonal to implementing a snapshot isolation mechanism.
+
+# Exam Questions
+* What's the cost for a `Session` to begin a transaction at snapshot isolation?
+* When two transactions are concurrently trying to add an uncommitted `Mod` to a single `UpdateChain`, this exercise suggests locking to ensure only one transaction succeeds (the other receiving a `WriteConflict` error). What would be an alternative implementation?
+* In this exercise, as the `Database` accepts more and more writes, the `UpdateChain`s can become arbitrarily long. Can you come up with a way to identify which `Mod` objects can be safely deleted?
