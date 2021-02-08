@@ -54,7 +54,7 @@ func (chain *UpdateChain) Dump() string {
 
 	node := chain.Head
 	for node != nil {
-		fmt.Fprintf(ret, " -> %v", node)
+		fmt.Fprintf(ret, " -> %v (%v, TS(%v))", node, node.TxnId, node.Ts)
 		node = node.Next
 	}
 
@@ -63,6 +63,7 @@ func (chain *UpdateChain) Dump() string {
 
 type Mod struct {
 	TxnId uint64
+	Ts    uint64
 	Value int
 	Verb  Verb
 
@@ -71,5 +72,5 @@ type Mod struct {
 }
 
 func (mod *Mod) String() string {
-	return fmt.Sprintf("TxnId: %v Value: %v %v", mod.TxnId, mod.Verb, mod.Value)
+	return fmt.Sprintf("TxnId: %v Ts: %v Value: %v %v", mod.TxnId, mod.Ts, mod.Verb, mod.Value)
 }

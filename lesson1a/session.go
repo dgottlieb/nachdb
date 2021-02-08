@@ -2,8 +2,45 @@ package nachdb
 
 import (
 	"errors"
-	"fmt"
 )
+
+func (session *Session) BeginTxn() error {
+	session.Lock()
+	defer session.Unlock()
+
+	if session.InTxn {
+		return errors.New("Already in a transaction.")
+	}
+
+	session.InTxn = true
+
+	globalTxn := &session.Database.GlobalTxn
+	globalTxn.Lock()
+	defer globalTxn.Unlock()
+
+	session.Txn.SnapMax = globalTxn.NextTxnId
+	session.Txn.Id = globalTxn.NextTxnId
+	globalTxn.NextTxnId++
+
+	snapMin := globalTxn.NextTxnId
+	for _, otherSession := range globalTxn.Sessions {
+		if session == otherSession {
+			continue
+		}
+
+		otherSession.Lock()
+		if otherSession.InTxn {
+			session.Txn.ConcurrentSnap = append(session.Txn.ConcurrentSnap, otherSession.Txn.Id)
+			if otherSession.Txn.Id < snapMin {
+				snapMin = otherSession.Txn.Id
+			}
+		}
+		otherSession.Unlock()
+	}
+
+	session.Txn.SnapMin = snapMin - 1
+	return nil
+}
 
 func (session *Session) Write(key string, value int) error {
 	if !session.InTxn {
@@ -15,9 +52,16 @@ func (session *Session) Write(key string, value int) error {
 	updateChain.Lock()
 	defer updateChain.Unlock()
 
-	if updateChain.Head != nil {
-		if !session.IsVisible(updateChain.Head.TxnId) {
-			return fmt.Errorf("WriteConflict. Key: %v", key)
+	for mod := updateChain.Head; mod != nil; mod = mod.Next {
+		if mod.TxnId == ROLLED_BACK {
+			// Pass over rolled back updates.
+			continue
+		}
+
+		if !session.IsVisible(mod.TxnId, mod.Ts) {
+			return WRITE_CONFLICT
+		} else {
+			break
 		}
 	}
 
@@ -29,7 +73,8 @@ func (session *Session) Write(key string, value int) error {
 		verb = UpdateMod
 	}
 
-	newMod = &Mod{session.Txn.Id, value, verb, nil, nil}
+	newMod = &Mod{session.Txn.Id, session.Txn.ModTimestamp, value, verb, nil, nil}
+	session.Txn.Mods = append(session.Txn.Mods, newMod)
 
 	updateChain.Add(newMod)
 	return nil
@@ -44,18 +89,11 @@ func (session *Session) Read(key string) (int, error) {
 	updateChain.Lock()
 	defer updateChain.Unlock()
 
-	mod := updateChain.Head
-	for {
-		if mod == nil {
-			return 0, NOT_FOUND
-		}
-
-		if session.IsVisible(mod.TxnId) {
+	for mod := updateChain.Head; mod != nil; mod = mod.Next {
+		if session.IsVisible(mod.TxnId, mod.Ts) {
 			return mod.Value, nil
 		}
-
-		mod = mod.Next
 	}
 
-	panic("Unreachable.")
+	return 0, NOT_FOUND
 }

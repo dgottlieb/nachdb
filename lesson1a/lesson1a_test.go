@@ -30,7 +30,53 @@ func TestWriteConflict(test *testing.T) {
 		Begin("Alice"),
 		Insert("Alice", "A", 1),
 		Begin("Bob"),
-		Error(Insert("Bob", "A", 2)),
+		ExpectError(Insert("Bob", "A", 2), WRITE_CONFLICT),
+	})
+}
+
+func TestMultiTimestampNormal(test *testing.T) {
+	doTest(test, []Action{
+		Begin("Alice"),
+		Timestamp("Alice", 10),
+		Insert("Alice", "A", 10),
+		Timestamp("Alice", 20),
+		Insert("Alice", "B", 20),
+		Timestamp("Alice", 30),
+		Insert("Alice", "B", 30),
+		Commit("Alice"),
+		AssertReadAt(TS(10), "A", 10),
+		AssertReadAt(TS(20), "B", 20),
+		AssertReadAt(TS(30), "B", 30),
+		AssertNilReadAt(TS(5), "A"),
+	})
+}
+
+func TestDoubleRawInsert(test *testing.T) {
+	doTest(test, []Action{
+		Begin("Alice"),
+		Insert("Alice", "A", 10),
+		Timestamp("Alice", 10),
+		Insert("Alice", "Oplog_A", 10),
+		Insert("Alice", "B", 20),
+		Timestamp("Alice", 20),
+		Insert("Alice", "Oplog_B", 20),
+		Commit("Alice"),
+		AssertNilReadAt(TS(10), "A"),
+		AssertReadAt(TS(20), "A", 10),
+		AssertReadAt(TS(10), "Oplog_A", 10),
+		AssertReadAt(TS(10), "B", 20),
+		AssertReadAt(TS(20), "Oplog_B", 20),
+	})
+}
+
+func TestSelfWriteConflict(test *testing.T) {
+	doTest(test, []Action{
+		Begin("Alice"),
+		Timestamp("Alice", 20),
+		Insert("Alice", "A", 20),
+		Commit("Alice"),
+		BeginWithReadTs("Alice", 10),
+		ExpectError(Insert("Alice", "A", 30), WRITE_CONFLICT),
 	})
 }
 
